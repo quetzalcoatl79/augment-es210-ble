@@ -1,0 +1,29 @@
+# Config perso (contient TA MAC + TES jetons — ne jamais versionner)
+config.ini
+*.local.*
+secrets*
+
+# Captures BLE (données de ton appareil)
+*.log
+btsnoop*
+*bugreport*.zip
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Android / Gradle
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+android/.idea/
+android/captures/
+*.apk
+*.keystore
+*.jks
+
+# Divers
+.DS_Store
