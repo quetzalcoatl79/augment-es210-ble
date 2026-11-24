@@ -84,19 +84,65 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb push android/app/build/outputs/apk/debug/app-debug.apk /sdcard/Download/
 ```
 
-## Capturer TES jetons `unlock` / `lock`
+## 🔑 Capturer TES jetons `unlock` / `lock` (obligatoire)
 
-Ils sont propres à ta trottinette → capture-les depuis **ta** appli Augment :
+Les 5 octets de verrouillage/déverrouillage sont **propres à chaque trottinette**
+(c'est pourquoi Augment lie le déverrouillage à ton compte). **Ce dépôt n'en contient
+aucun** : tu captures **les tiens** en observant **ta** appli Augment faire l'opération,
+via le journal Bluetooth (HCI snoop) d'Android. ~10 min, aucun root.
 
-1. Active **Options développeur → Journal HCI Bluetooth** sur ton Android.
-2. Appli Augment ouverte et connectée à TA trottinette, fais **Déverrouiller**
-   puis **Verrouiller**.
-3. Récupère le log : `adb bugreport out.zip` → dézippe
-   `FS/data/misc/bluetooth/logs/btsnoop_hci.log`.
-4. Décode : `python tools/parse_btsnoop.py btsnoop_hci.log`
-   → repère les **Write Request** sur le **handle de la carac. 6884** :
-   la valeur 5 octets écrite au déverrouillage = ton `unlock`, au verrouillage = ton `lock`.
-5. Mets-les dans `config.ini`.
+### A. Préparer le téléphone (Android)
+1. **Activer les options développeur** : *Réglages → À propos du téléphone* → tape
+   **7 fois** sur « Numéro de build » (Xiaomi/HyperOS : sur « Version HyperOS/MIUI »).
+2. Dans **Options pour développeurs**, active :
+   - **Débogage USB**
+   - **Journal HCI Bluetooth** (« Enable Bluetooth HCI snoop log ») → *Activé*.
+3. **Coupe puis rallume le Bluetooth** (ça démarre un journal neuf et propre).
+
+### B. Préparer le PC
+- Installe `adb` (paquet *android-tools* / *platform-tools*).
+- Branche le téléphone en USB, choisis le mode **Transfert de fichiers (MTP)**, et
+  **autorise** la clé RSA quand le téléphone le demande.
+- Vérifie : `adb devices` → ton téléphone doit apparaître en `device`.
+
+### C. Capturer l'opération
+1. Ouvre l'**appli Augment**, connecte-la à **ta** trottinette (allumée).
+2. Fais **Déverrouiller**, attends ~2 s, puis **Verrouiller** (ces deux actions
+   envoient les deux jetons qu'on veut).
+3. Récupère le journal :
+   ```bash
+   adb bugreport capture.zip
+   unzip -j capture.zip "FS/data/misc/bluetooth/logs/btsnoop_hci.log" -d .
+   ```
+
+### D. Décoder
+1. Trouve le handle ATT de la caractéristique **6884** (commande) :
+   ```bash
+   python tools/gatt_map.py btsnoop_hci.log | grep 6884
+   #  0x0038 : 6884   [read,wrNoRsp,write]      ← ici le handle = 0x0038
+   ```
+2. Liste les écritures et repère les **deux écritures de 5 octets sur ce handle** :
+   ```bash
+   python tools/parse_btsnoop.py btsnoop_hci.log | grep "Write Request"
+   ```
+   ```
+   TX> Write Request  handle=0x0038 val=[a1 b2 c3 d4 e5]   ← déverrouillage = ton UNLOCK
+   TX> Write Request  handle=0x0038 val=[f0 11 22 33 44]   ← verrouillage   = ton LOCK
+   ```
+   > ⚠️ Les valeurs ci-dessus sont des **exemples bidon** : les tiennes seront différentes.
+3. Reporte-les **sans espaces** dans `config.ini` :
+   ```ini
+   unlock = a1b2c3d4e5
+   lock   = f011223344
+   ```
+
+### Dépannage
+- `adb devices` vide → repasse le câble en **Transfert de fichiers**, active le
+  Débogage USB (Xiaomi : parfois aussi « Débogage USB (réglages de sécurité) »).
+- Journal vide → « Journal HCI Bluetooth » bien *Activé* ? Refais le cycle Bluetooth
+  avant de capturer.
+- Beaucoup de lignes → les *Notification* sont normales (télémétrie) ; seules les
+  **Write Request de 5 octets** sur le handle de 6884 t'intéressent.
 
 Outils d'analyse fournis : `parse_btsnoop.py` (trames ATT), `gatt_map.py`
 (handles → UUID), `analyze.py` (synthèse par caractéristique).
